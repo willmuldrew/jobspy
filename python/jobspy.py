@@ -7,6 +7,8 @@ import time
 from Queue import Queue 
 import socket
 import getpass
+import signal
+import os
 
 import requests
 
@@ -15,6 +17,16 @@ requests_session = requests.Session()
 def post_json(url, data):
     # Add retries...
     requests_session.post(url, json=data)
+
+def sigdie(sig):
+    """Attempt to die from a signal.
+    """
+    signal.signal(sig, signal.SIG_DFL)
+    os.kill(os.getpid(), sig)
+    # We should not get here, but if we do, this exit() status
+    # is as close as we can get to what happens when we die from
+    # a signal.
+    return 128 + sig
 
 
 class OutputReaderThread(threading.Thread):
@@ -26,8 +38,9 @@ class OutputReaderThread(threading.Thread):
 
     def run(self):
         for line in iter(self._src_fd.readline, ""):
-            self._output_queue.put((time.time(), self._dest_fd.fileno(), line.rstrip("\n")))
             self._dest_fd.write(line)
+            self._dest_fd.flush()
+            self._output_queue.put((time.time(), self._dest_fd.fileno(), line.rstrip("\n")))
 
 class OutputPusherThread(threading.Thread):
     def __init__(self, src_queue, url):
@@ -92,12 +105,13 @@ def main():
     post_meta({ 
         "endTime" : end_time,
         "durationSeconds" : end_time - start_time,
-        "exitcode" : rc,
+        "returncode" : rc,
     })
 
-    # TODO what if rc < 0
-    sys.exit(rc)
-    
+    if rc >= 0:
+        sys.exit(rc)
+    else:
+        sigdie(-rc)
 
 if __name__ == "__main__":
     main()
