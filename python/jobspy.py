@@ -5,10 +5,9 @@ import subprocess
 import threading
 import time
 from Queue import Queue 
-import socket
-import getpass
 import signal
 import os
+import uuid
 
 import requests
 
@@ -65,7 +64,7 @@ class OutputPusherThread(threading.Thread):
 def main():
     # jobspy.py http://endpoint/foo/bar cmd ...
     cmd = sys.argv[2:]
-    url = sys.argv[1]
+    url = sys.argv[1] + "/" + str(uuid.uuid4())
 
     def post_meta(meta):
         post_json(url + "/meta", meta)
@@ -85,8 +84,7 @@ def main():
         "startTime" : start_time,
         "cmd" : cmd,
         "pid" : p.pid,
-        "username" : getpass.getuser(),
-        "hostname" : socket.gethostname(),
+        "env" : dict(os.environ),
     })
 
     while True:
