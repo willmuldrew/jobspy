@@ -8,14 +8,24 @@ from Queue import Queue
 import signal
 import os
 import uuid
+import datetime
+import socket
+import getpass
 
 import requests
 
 requests_session = requests.Session()
 
+
 def post_json(url, data):
     # Add retries...
     requests_session.post(url, json=data)
+
+
+def put_json(url, data):
+    # Add retries...
+    requests_session.put(url, json=data)
+
 
 def sigdie(sig):
     """Attempt to die from a signal.
@@ -59,17 +69,20 @@ class OutputPusherThread(threading.Thread):
                 lines.append(self._src_queue.get())
             if len(lines) > 0:
                 # TODO - deal with errors 
-                post_json(self._url, lines)
+                pass # post_json(self._url, lines)
 
 def main():
     # jobspy.py http://endpoint/foo/bar cmd ...
-    cmd = sys.argv[2:]
-    url = sys.argv[1] + "/" + str(uuid.uuid4())
+    cmd = sys.argv[1:]
+    process_uuid = str(uuid.uuid4())
 
-    def post_meta(meta):
-        post_json(url + "/meta", meta)
+    def put_es(subtype, meta):
+        meta = dict(meta)
+        meta["timestamp"] = datetime.datetime.utcnow().isoformat()
+        post_json("http://localhost:9200/jobspy/" + subtype + "/" + process_uuid, meta)
 
     start_time = time.time()
+    start_timestamp = datetime.datetime.utcnow()
     output_queue = Queue()
 
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -77,15 +90,21 @@ def main():
     stderr_reader = OutputReaderThread(p.stderr, sys.stderr, output_queue)
     stdout_reader.start()
     stderr_reader.start()
-    output_pusher = OutputPusherThread(output_queue, url + "/output") 
+    output_pusher = OutputPusherThread(output_queue, "/output") 
     output_pusher.start()
 
-    post_meta({ 
-        "startTime" : start_time,
-        "cmd" : cmd,
-        "pid" : p.pid,
-        "env" : dict(os.environ),
-    })
+    meta = {  
+        "startTime": start_time,
+        "startTimestamp": start_timestamp.isoformat(),
+        "cmd": cmd,
+        "pid": p.pid,
+        "env": dict(os.environ),
+        "user": getpass.getuser(),
+        "hostname": socket.gethostname(),
+    }
+
+    put_es("jobmeta", meta)
+ 
 
     while True:
         try:
@@ -94,17 +113,21 @@ def main():
         except KeyboardInterrupt:
             pass
     end_time = time.time() 
+    end_timestamp = datetime.datetime.utcnow()
 
     stdout_reader.join()
     stderr_reader.join()
     output_pusher.stop()
     output_pusher.join()
 
-    post_meta({ 
-        "endTime" : end_time,
-        "durationSeconds" : end_time - start_time,
-        "returncode" : rc,
+    meta.update({ 
+        "endTime": end_time,
+        "endTimestamp": end_timestamp.isoformat(),
+        "durationSeconds": end_time - start_time,
+        "returnCode": rc,
     })
+
+    put_es("jobmeta", meta)
 
     if rc >= 0:
         sys.exit(rc)

@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Recent Jobs{% endblock %}
+{% block content %}
+<h2>Recent Jobs</h2>
+<table class="table">
+    {% set header = "startTimestamp endTimestamp durationSeconds user hostname pid cmd returnCode".split() %}
+    <tr>
+        <th>id</th>
+        {% for h in header %}
+        <th> {{ h }} </th>
+        {% endfor %}
+    </tr>
+    {% for m in jobmetas %}
+    <tr>
+        <td><a href="job/{{m['_id']}}">{{ m['_id'] }}</a></td>
+        {% for h in header %}
+        <td> {{ m['_source'].get(h, "") }} </td>
+        {% endfor %}
+        {% endfor %}
+    </tr>
+</table>
+{% endblock %}

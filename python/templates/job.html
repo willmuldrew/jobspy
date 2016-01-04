@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Job Metadata{% endblock %}
+{% block content %}
+<h2>Job Metadata</h2>
+<table class="table">
+    <tr><th>Name</th><th>Value</th></tr>
+    {% for k in jobmeta %}
+    <tr><td>{{ k }}</td><td>{{ jobmeta[k] }}</td></tr>
+    {% endfor %}
+</table>
+{% endblock %}
+
